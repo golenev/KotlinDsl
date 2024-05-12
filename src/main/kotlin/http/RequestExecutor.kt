@@ -1,47 +1,63 @@
-package org.example.http
+package http
 
+import http.RequestMethod.*
 
 enum class RequestMethod {
-    GET, POST, PUT, DELETE, PATCH
+    GET, POST, PUT, DELETE, PATCH;
 }
 
 data class Product(val name: String, val quantity: Int, val price: Double)
 
-data class RequestEntity(val requestMethod: RequestMethod, val header: Int, val params: Double, val body: Any?)
+data class RequestEntity<T, K, V>(
+    val requestMethod: RequestMethod,
+    val headers: Map<K, V>,
+    val params: Double,
+    val body: T?
+)
 
-
-class RequestBuilder {
-
-    fun executeRequest(function: RequestBuilder.() -> RequestEntity): RequestEntity {
+class RequestExecutor {
+    operator fun <T> invoke(function: RequestExecutor.() -> T): T {
         return function()
     }
 
-    operator fun invoke(function: RequestBuilder.() -> RequestEntity): RequestEntity {
-        return function()
+    infix fun <T> T.withBody(body: Any): RequestEntity<Any, *, *> {
+        return when (this) {
+            is RequestEntity<*, *, *> -> (this as RequestEntity<Any, *, *>).copy(body = body)
+            is RequestMethod -> RequestEntity(this, emptyMap<Any, Any>(), 0.0, body)
+            else -> throw IllegalArgumentException("Invalid type for withBody")
+        }
     }
 
-    infix fun RequestMethod.withBody(body: Any): RequestEntity {
-        return RequestEntity(this, 0, 0.0, body)
+    infix fun <T, K, V> T.withHeaders(headers: Map<K, V>): RequestEntity<T, K, V> {
+        return when (this) {
+            is RequestEntity<*, *, *> -> (this as RequestEntity<T, K, V>).copy(headers = headers)
+            is RequestMethod -> RequestEntity(this, headers, 0.0, null)
+            else -> throw IllegalArgumentException("Invalid type for withHeaders")
+        }
     }
 
-    infix fun RequestEntity.withHeaders(header: Int): RequestEntity {
-        return this.copy(header = header)
-    }
-
-    infix fun RequestEntity.withParams(params: Double): RequestEntity {
-        return this.copy(params = params)
+    infix fun <T> T.withParams(params: Double): RequestEntity<T, *, *> {
+        return when (this) {
+            is RequestEntity<*, *, *> -> (this as RequestEntity<T, Any, Any>).copy(params = params)
+            is RequestMethod -> RequestEntity(this, emptyMap<Any, Any>(), params, null)
+            else -> throw IllegalArgumentException("Invalid type for withParams")
+        }
     }
 }
 
-
 fun main() {
-
-    val requestBuilder = RequestBuilder()
+    val requestExecutor = RequestExecutor()
     val productBody = Product("lemon", 12, 2.0)
+    val headers = mapOf("Content-Length" to 400, "isOrigin" to true)
 
-    val requestEntity = requestBuilder.executeRequest {
-        RequestMethod.POST withBody productBody withHeaders 400 withParams 55.7
+    val postRequestEntity = requestExecutor {
+        POST withBody productBody withHeaders headers withParams 55.7
     }
 
-    println(requestEntity)
+    val getRequestEntity = requestExecutor {
+        GET withHeaders headers withParams 55.7
+    }
+
+    println(getRequestEntity)
+    println(postRequestEntity)
 }
